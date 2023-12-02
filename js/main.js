@@ -5,7 +5,7 @@ const rssURLs = JSON.stringify([
   'https://feeds.bbci.co.uk/news/world/rss.xml',
   'https://threatpost.com/feed/'
 ]);
-const feedDescs = JSON.stringify(['BBC World News','KrebsOnSecurity','ThreatPost']);
+const feedDescs = JSON.stringify(['KrebsOnSecurity','BBC World News','ThreatPost']);
 
 document.cookie = `feed=${rssURLs}; expires=Thu, 01 Jan 2024 00:00:00 UTC; path=/`;
 document.cookie = `feedDesc=${feedDescs}; expires=Thu, 01 Jan 2024 00:00:00 UTC; path=/`;
@@ -29,9 +29,10 @@ const cookieFeed = getCookieValue("feed");
 const cookieFeedDescs = getCookieValue("feedDesc");
 const maxArticles = 10;
 
-async function getRSS(){
+async function getRSS(feedUrl){
 
-  let apiUrlPartial = `https://feed-reader3.p.rapidapi.com/load?${maxArticles}=10&url=`;
+  const encodedUrl = encodeURIComponent(feedUrl);
+  const apiUrl = `https://feed-reader3.p.rapidapi.com/load?url=${encodedUrl}&maxCount=${maxArticles}`;
   const options = {
     method: 'GET',
     headers: {
@@ -40,101 +41,63 @@ async function getRSS(){
     }
   };
 
-  let i = 0;
-  const feedResults = {};
-  for(let rssURL of cookieFeed){
-    const rssDesc = cookieFeedDescs[i++];
-
-    try {
-      const apiUrl = apiUrlPartial + encodeURIComponent(rssURL);
+  try {
       const response = await fetch(apiUrl, options);
       if (!response.ok) {
         throw new Error(`HTTP error, status = ${response.status}`);
       }
+      return {'data':(await response.json())['data']};
 
-      feedResults[rssURL] = {
-        'feedDescription': rssDesc,
-        'data': (await response.json())['data']
-      }
-
-    } catch (error) {
-      feedResults[rssURL] = {
-        'error': error.message
-      }
-    }
+  } catch (error) {
+      return  {'error': error.message}
   }
-  return feedResults;
 }
 
-async function visualizePosts(){
-  const rss = await getRSS();
+function visualizePosts(){
+
   const feedsDiv = document.createElement("div");
   document.body.appendChild(feedsDiv);
   feedsDiv.id = "feeds";
 
-  for(let postURL of Object.keys(rss)){
+  let i = 0;
+  for(let feedURL of cookieFeed){
 
-    const feedDiv = document.createElement("div")
-    const feedDesc = document.createElement("h1");
-    feedDesc.className = "feedDescription"
-    feedDiv.className = "feed"
-    feedDiv.appendChild(feedDesc);
-    feedsDiv.appendChild(feedDiv);
+    const feedDesc = cookieFeedDescs[i++];
+    const rssPromise = getRSS(feedURL);
+    rssPromise.then((rss)=>{
+      const feedDiv = document.createElement("div");
+      const feedDescNode = document.createElement("h1");
+      feedDescNode.appendChild(document.createTextNode(feedDesc));
+      feedDescNode.className = "feedDescription";
+      feedDiv.className = "feed";
+      feedDiv.appendChild(feedDescNode);
+      feedsDiv.appendChild(feedDiv);
 
-    if('error' in rss[postURL]){
-      feedDesc.appendChild(document.createTextNode(postURL));
-      const errorNode = document.createElement("p");
-      errorNode.appendChild((document.createTextNode(rss[postURL]['error'])));
-      feedDiv.appendChild(errorNode);
-      continue;
-    }
-    else{
-      feedDesc.appendChild(document.createTextNode(rss[postURL]['feedDescription']));
-    }
-
-    for(let post of rss[postURL]['data']){
-      const postDiv = document.createElement("div");
-      postDiv.className = "post"
-
-      const postComponents = ["title", "description", "publishDateFormatted", "link", "author"];
-      for(let component of postComponents){
-        const componentData = post[component];
-        if(componentData) {
-          const p = document.createElement("p")
-          p.className = component;
-          p.appendChild(document.createTextNode(post[component]));
-          postDiv.appendChild(p);
-        }
+      if('error' in rss){
+        const errorNode = document.createElement("p");
+        errorNode.appendChild((document.createTextNode(rss.error)));
+        feedDiv.appendChild(errorNode);
+        return;
       }
-      feedDiv.appendChild(postDiv);
-    }
 
+      for(let post of rss['data']){
+        const postDiv = document.createElement("div");
+        postDiv.className = "post"
 
+        const postComponents = ["title", "description", "publishDateFormatted", "link", "author"];
+        for(let component of postComponents){
+          const componentData = post[component];
+          if(componentData) {
+            const p = document.createElement("p")
+            p.className = component;
+            p.appendChild(document.createTextNode(post[component]));
+            postDiv.appendChild(p);
+          }
+        }
+        feedDiv.appendChild(postDiv);
+      }
+    });
   }
 }
+
 visualizePosts();
-async function gogo() {
-  const url = 'https://feed-reader3.p.rapidapi.com/loadMultiple?maxCount=100';
-  const options = {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'X-RapidAPI-Key': '4786031d7dmsh01cc3b12b2500f5p1b86b1jsn5af09d3dbd7e',
-      'X-RapidAPI-Host': 'feed-reader3.p.rapidapi.com'
-    },
-    body: JSON.stringify([
-      'https://krebsonsecurity.com/feed/',
-      'https://feeds.bbci.co.uk/news/world/rss.xml',
-      'https://threatpost.com/feed/'
-    ])
-  };
-
-  try {
-    const response = await fetch(url, options);
-    const result = await response.text();
-    console.log(result);
-  } catch (error) {
-    console.error(error);
-  }
-}
-//gogo();
