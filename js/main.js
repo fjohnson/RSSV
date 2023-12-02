@@ -12,8 +12,7 @@ document.cookie = `feedDesc=${feedDescs}; expires=Thu, 01 Jan 2024 00:00:00 UTC;
 
 function getCookieValue(cookieName) {
   const name = cookieName + "=";
-  //const decodedCookie = decodeURIComponent(document.cookie);
-  const cookieArray = document.cookie.split(';')//decodedCookie.split(';');
+  const cookieArray = document.cookie.split(';')
 
   for (let i = 0; i < cookieArray.length; i++) {
     let cookie = cookieArray[i].trim();
