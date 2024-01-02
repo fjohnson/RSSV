@@ -1,34 +1,8 @@
-
-/*https://rapidapi.com/kizil/api/feed-reader3/*/
-const rssURLs = JSON.stringify([
-  'https://krebsonsecurity.com/feed/',
-  'https://feeds.bbci.co.uk/news/world/rss.xml',
-  'https://threatpost.com/feed/'
-]);
-const feedDescs = JSON.stringify(['KrebsOnSecurity','BBC World News','ThreatPost']);
-
-document.cookie = `feed=${rssURLs}; expires=Thu, 01 Jan 2024 00:00:00 UTC; path=/`;
-document.cookie = `feedDesc=${feedDescs}; expires=Thu, 01 Jan 2024 00:00:00 UTC; path=/`;
-
-function getCookieValue(cookieName) {
-  const name = cookieName + "=";
-  const cookieArray = document.cookie.split(';')
-
-  for (let i = 0; i < cookieArray.length; i++) {
-    let cookie = cookieArray[i].trim();
-    if (cookie.indexOf(name) === 0) {
-      return JSON.parse(cookie.substring(name.length, cookie.length));
-    }
-  }
-  return null;
-}
-
-// Usage
-const cookieFeed = getCookieValue("feed");
-const cookieFeedDescs = getCookieValue("feedDesc");
 const maxArticles = 10;
+let hasSaved = false;
 
 async function getRSS(feedUrl){
+  /*https://rapidapi.com/kizil/api/feed-reader3/*/
 
   const encodedUrl = encodeURIComponent(feedUrl);
   const apiUrl = `https://feed-reader3.p.rapidapi.com/load?url=${encodedUrl}&maxCount=${maxArticles}`;
@@ -52,51 +26,277 @@ async function getRSS(feedUrl){
   }
 }
 
-function visualizePosts(){
+function validateStorage(){
+  const jsonUrls = window.localStorage.getItem("urls");
+  const jsonDescriptions = window.localStorage.getItem("descriptions");
+  if(!jsonUrls) return null;
+  if(!jsonDescriptions) return null;
+
+  const urls = JSON.parse(jsonUrls);
+  const descriptions = JSON.parse(jsonDescriptions);
+
+  if(urls.length !== descriptions.length) return null;
+  return [urls,descriptions];
+}
+async function visualizePosts(){
+
+  const localStorage = validateStorage();
+  if(localStorage === null) return;
+
+  const [urls, descriptions] = localStorage;
+
+  const feedRoot = document.getElementById("feeds");
+  if(feedRoot) feedRoot.remove();
 
   const feedsDiv = document.createElement("div");
   document.body.appendChild(feedsDiv);
   feedsDiv.id = "feeds";
 
+  const rssPromises = []
+  for(let feedURL of urls){
+    rssPromises.push(getRSS(feedURL));
+  }
+
   let i = 0;
-  for(let feedURL of cookieFeed){
-
-    const feedDesc = cookieFeedDescs[i++];
-    const rssPromise = getRSS(feedURL);
-    rssPromise.then((rss)=>{
-      const feedDiv = document.createElement("div");
-      const feedDescNode = document.createElement("h1");
-      feedDescNode.appendChild(document.createTextNode(feedDesc));
-      feedDescNode.className = "feedDescription";
-      feedDiv.className = "feed";
-      feedDiv.appendChild(feedDescNode);
-      feedsDiv.appendChild(feedDiv);
-
-      if('error' in rss){
-        const errorNode = document.createElement("p");
-        errorNode.appendChild((document.createTextNode(rss.error)));
-        feedDiv.appendChild(errorNode);
-        return;
-      }
-
-      for(let post of rss['data']){
-        const postDiv = document.createElement("div");
-        postDiv.className = "post"
-
-        const postComponents = ["title", "description", "publishDateFormatted", "link", "author"];
-        for(let component of postComponents){
-          const componentData = post[component];
-          if(componentData) {
-            const p = document.createElement("p")
-            p.className = component;
-            p.appendChild(document.createTextNode(post[component]));
-            postDiv.appendChild(p);
-          }
-        }
-        feedDiv.appendChild(postDiv);
-      }
-    });
+  for await(let rss of rssPromises){
+    const feedDesc = descriptions[i++];
+    addFeedHtml(rss, feedDesc);
   }
 }
 
+function addFeedHtml(rss, feedDesc){
+  const feedsDiv = document.getElementById("feeds");
+  const feedDiv = document.createElement("div");
+  const feedDescNode = document.createElement("h1");
+  feedDescNode.appendChild(document.createTextNode(feedDesc));
+  feedDescNode.className = "feedDescription";
+  feedDiv.className = "feed";
+  feedDiv.appendChild(feedDescNode);
+  feedsDiv.appendChild(feedDiv);
+
+  if('error' in rss){
+    const errorNode = document.createElement("p");
+    errorNode.appendChild((document.createTextNode(rss.error)));
+    feedDiv.appendChild(errorNode);
+    return;
+  }
+
+  for(let post of rss['data']){
+    const postDiv = document.createElement("div");
+    const postHeader = document.createElement("div");
+    const link = document.createElement("a");
+    const date = document.createElement("p");
+    const description = document.createElement("p");
+
+
+    postDiv.className = "post";
+    postDiv.appendChild(postHeader);
+    postDiv.appendChild(description);
+    postHeader.className = "postHeader";
+    postHeader.append(link, date);
+
+    link.setAttribute("href",post["link"]);
+    link.appendChild(document.createTextNode(post["title"]));
+    link.className = "rssLink";
+    date.className="publishDate";
+    date.appendChild(document.createTextNode(post["publishDateFormatted"]));
+    description.appendChild(document.createTextNode(post["description"]));
+
+    feedDiv.appendChild(postDiv);
+  }
+}
 visualizePosts();
+
+/* *
+ Titlebar related code
+ */
+const titleBarCenter = document.getElementById("titleBarCenter");
+const elements = document.querySelectorAll(".titleBarComponent");
+const element = elements[0]; // target element that has animation ending last
+
+element.addEventListener('animationend', function(event) {
+  const nodeListArray = Array.from(elements);
+  for(let e of nodeListArray.slice(0,3)){
+    e.remove();
+  }
+  nodeListArray[nodeListArray.length-1].style.position = "static";
+});
+
+/* *
+* Edit RSS URLs specific code
+* */
+const feedRow =
+  `<div class="rss-entry">
+    <md-outlined-text-field class="rss-url" label="RSS Url" type="url" required>
+        <md-icon slot="leading-icon">rss_feed</md-icon>
+    </md-outlined-text-field>
+
+    <md-outlined-text-field class="rss-description" type="text" label="Title" value=""
+                            required error-text="Please fill out this field">
+    </md-outlined-text-field>
+
+    <md-filled-tonal-icon-button class="shift-button">
+        <md-icon>arrow_upward</md-icon>
+    </md-filled-tonal-icon-button>
+
+    <md-filled-tonal-icon-button class="delete-button">
+        <md-icon>delete_forever</md-icon>
+    </md-filled-tonal-icon-button>
+</div>`;
+
+
+document.addEventListener('DOMContentLoaded', function() {
+  const newFeedButton = document.getElementById("new-feed-button");
+  const rssUrlsDiv = document.getElementById("rss-urls");
+
+  for (let dButton of document.getElementsByClassName("delete-button")){
+    dButton.addEventListener("click", deleteButtonListener);
+  }
+  for (let shiftButton of document.getElementsByClassName("shift-button")){
+    shiftButton.addEventListener("click", shiftButtonListener);
+  }
+
+  newFeedButton.addEventListener("click", function(){
+    newRssUrlRow();
+  });
+
+  function deleteButtonListener(event){
+    const button = event.target;
+    rssUrlsDiv.removeChild(button.parentElement);
+
+    if(rssUrlsDiv.children.length===1){
+      const onlyRow = rssUrlsDiv.children[0];
+      const shiftButton = onlyRow.getElementsByClassName("shift-button")[0];
+      shiftButton.querySelector("md-icon").textContent = "arrow_downward";
+    }
+  }
+
+  function shiftButtonListener(event){
+    const thisRow = event.target.parentElement;
+    const selector = ".shift-button > md-icon";
+
+    let i = 0;
+    for(let row of rssUrlsDiv.children){
+      if(thisRow === row) break;
+      else i++;
+    }
+    if(i===0){ //shift down
+      if(rssUrlsDiv.children.length > 1) {
+        const siblingRow = rssUrlsDiv.children[1];
+
+        thisRow.remove();
+        insertAfter(thisRow, siblingRow);
+        thisRow.querySelector(selector).textContent = "arrow_upward";
+        siblingRow.querySelector(selector).textContent = "arrow_downward";
+      }
+
+    }
+    else{ //shift up
+      const siblingRow = rssUrlsDiv.children[i-1];
+
+      rssUrlsDiv.insertBefore(thisRow,siblingRow);
+      if(i-1 === 0){
+        thisRow.querySelector(selector).textContent = "arrow_downward";
+        siblingRow.querySelector(selector).textContent = "arrow_upward";
+      }
+    }
+  }
+  function insertAfter(newElement, targetElement) {
+    const parentElement = targetElement.parentNode;
+    const siblingElement = targetElement.nextSibling;
+
+    if (siblingElement) {
+      parentElement.insertBefore(newElement, siblingElement);
+    } else {
+      parentElement.appendChild(newElement);
+    }
+  }
+
+  const exitButton = document.getElementById("rss-settings-exit-button");
+  exitButton.addEventListener("click", ()=>{
+    const rssEditModal = document.getElementById("edit-feeds-modal");
+
+    rssEditModal.style.display = 'none';
+    editButton.style.display='block';
+    if(hasSaved){
+      visualizePosts();
+    }
+  });
+
+  const editButton = document.getElementById("rss-settings-edit-button");
+  editButton.addEventListener("click", ()=>{
+    const rssEditModal = document.getElementById("edit-feeds-modal");
+
+    rssEditModal.style.display = 'block';
+    hasSaved = false;
+    editButton.style.display='none';
+
+    populateModal();
+  });
+
+  const saveButton = document.getElementById("save-feeds-button");
+  saveButton.addEventListener("click", () => {
+    const urls = [];
+    const descriptions = [];
+    const validationResults = [];
+
+    for(let url of document.getElementsByClassName("rss-url")){
+      validationResults.push(url.reportValidity());
+      urls.push(url.value);
+    }
+
+    for(let description of document.getElementsByClassName("rss-description")){
+      validationResults.push(description.reportValidity());
+      descriptions.push(description.value);
+    }
+
+    if(
+       (validationResults.every((v)=>v) && urls.length && descriptions.length) ||
+       (!urls.length && !descriptions.length) // case where there are no rows.
+    ){
+      window.localStorage.setItem("urls", JSON.stringify(urls));
+      window.localStorage.setItem("descriptions", JSON.stringify(descriptions));
+      hasSaved = true;
+    }
+
+  });
+
+  function newRssUrlRow(url=null, description=null){
+
+    rssUrlsDiv.insertAdjacentHTML("beforeend", feedRow);
+
+    const newRow = rssUrlsDiv.children[rssUrlsDiv.children.length-1];
+    const shiftButton = newRow.getElementsByClassName("shift-button")[0];
+    const dButton = newRow.getElementsByClassName("delete-button")[0];
+
+    shiftButton.addEventListener("click", shiftButtonListener);
+    dButton.addEventListener("click", deleteButtonListener);
+
+    if(rssUrlsDiv.children.length===1){
+      shiftButton.querySelector("md-icon").textContent = "arrow_downward";
+    }
+
+    if(url && description){
+      const urlInput = newRow.getElementsByClassName("rss-url")[0];
+      const descInput = newRow.getElementsByClassName("rss-description")[0];
+      urlInput.value = url;
+      descInput.value = description;
+    }
+  }
+  function populateModal(){
+
+    for(let child of rssUrlsDiv.children){
+      child.remove();
+    }
+
+    const storage = validateStorage();
+    if(!storage) return;
+
+    const [urls, descriptions] = storage;
+    let i = 0;
+    for(let url of urls){
+      newRssUrlRow(url, descriptions[i++]);
+    }
+  }
+
+});
