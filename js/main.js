@@ -52,6 +52,11 @@ async function visualizePosts(){
   document.body.appendChild(feedsDiv);
   feedsDiv.id = "feeds";
 
+  const menu = document.getElementById("usage-menu");
+  while (menu.firstChild) {
+    menu.removeChild(menu.firstChild);
+  }
+
   const rssPromises = []
   for(let feedURL of urls){
     rssPromises.push(getRSS(feedURL));
@@ -60,16 +65,17 @@ async function visualizePosts(){
   let i = 0;
   for await(let rss of rssPromises){
     const feedDesc = descriptions[i++];
-    addFeedHtml(rss, feedDesc);
+    addFeedHtml(rss, feedDesc, 'z'+i);
   }
 }
 
-function addFeedHtml(rss, feedDesc){
+function addFeedHtml(rss, feedDesc, id){
   const feedsDiv = document.getElementById("feeds");
   const feedDiv = document.createElement("div");
   const feedDescNode = document.createElement("h1");
   feedDescNode.appendChild(document.createTextNode(feedDesc));
   feedDescNode.className = "feedDescription";
+  feedDiv.id = id
   feedDiv.className = "feed";
   feedDiv.appendChild(feedDescNode);
   feedsDiv.appendChild(feedDiv);
@@ -80,6 +86,14 @@ function addFeedHtml(rss, feedDesc){
     feedDiv.appendChild(errorNode);
     return;
   }
+
+  const menu = document.getElementById("usage-menu");
+  menu.insertAdjacentHTML(
+    'beforeend',
+    `<md-menu-item href="#${id}">
+             <div slot="headline">${feedDesc}</div>
+         </md-menu-item>`
+  );
 
   for(let post of rss['data']){
     const postDiv = document.createElement("div");
@@ -212,26 +226,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  const exitButton = document.getElementById("rss-settings-exit-button");
-  exitButton.addEventListener("click", ()=>{
-    const rssEditModal = document.getElementById("edit-feeds-modal");
-
-    rssEditModal.style.display = 'none';
-    editButton.style.display='block';
-    if(hasSaved){
-      visualizePosts();
-    }
-  });
-
   const editButton = document.getElementById("rss-settings-edit-button");
   editButton.addEventListener("click", ()=>{
     const rssEditModal = document.getElementById("edit-feeds-modal");
+    const controlPanel = document.getElementById("control-panel");
 
     rssEditModal.style.display = 'block';
     hasSaved = false;
-    editButton.style.display='none';
+    controlPanel.style.display='none';
 
     populateModal();
+  });
+
+  const exitButton = document.getElementById("rss-settings-exit-button");
+  exitButton.addEventListener("click", ()=>{
+    const rssEditModal = document.getElementById("edit-feeds-modal");
+    const controlPanel = document.getElementById("control-panel");
+
+    rssEditModal.style.display = 'none';
+    controlPanel.style.display='flex';
+    if(hasSaved){
+      visualizePosts();
+    }
   });
 
   const saveButton = document.getElementById("save-feeds-button");
@@ -260,6 +276,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
   });
+
+  const anchorEl = document.body.querySelector('#usage-anchor');
+  const menuEl = document.body.querySelector('#usage-menu');
+  anchorEl.addEventListener('click', () => { menuEl.open = !menuEl.open; });
 
   function newRssUrlRow(url=null, description=null){
 

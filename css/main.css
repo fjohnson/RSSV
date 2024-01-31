@@ -271,6 +271,9 @@ src: https://codepen.io/markmead/pen/rNOqRNw
 body {
   font-family: "Righteous";
 }
+p {
+  font-family: Inter;
+}
 #titleBar {
   display: flex;
 }
@@ -393,10 +396,13 @@ body {
   margin-top: 2%;
   column-gap: 10px;
 }
-#rss-settings-edit-button{
+#control-panel{
   top:1%;
   position: sticky;
   margin-left: 1%;
+  display: flex;
+  gap: 5px;
+  margin-left:5px;
 }
 :root {
   --md-filled-tonal-icon-button-container-shape: 10px;
